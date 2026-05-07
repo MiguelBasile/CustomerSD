@@ -1,0 +1,29 @@
+{
+  "routes": [
+    {
+      "route": "/api/*",
+      "allowedRoles": ["anonymous"]
+    },
+    {
+      "route": "/.env*",
+      "statusCode": 404
+    },
+    {
+      "route": "/local.settings.json",
+      "statusCode": 404
+    }
+  ],
+  "responseOverrides": {
+    "404": {
+      "rewrite": "/"
+    }
+  },
+  "globalHeaders": {
+    "X-Content-Type-Options": "nosniff",
+    "Referrer-Policy": "strict-origin-when-cross-origin",
+    "Permissions-Policy": "camera=(), microphone=(), geolocation=()"
+  },
+  "platform": {
+    "apiRuntime": "node:20"
+  }
+}

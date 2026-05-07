@@ -1,0 +1,15 @@
+.next/
+node_modules/
+.tools/
+dev-server*.log
+playwright-report/
+test-results/
+out/
+dist/
+coverage/
+api/dist/
+.env
+.env.local
+customer-token.local.txt
+local.settings.json
+*.tsbuildinfo
