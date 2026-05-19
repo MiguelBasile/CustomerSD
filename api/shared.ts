@@ -44,6 +44,26 @@ type EntraTokenCache = {
   expiresAt: number;
 };
 
+type ClientPrincipal = {
+  identityProvider?: string;
+  userId?: string;
+  userDetails?: string;
+  userRoles?: string[];
+  claims?: Array<{ typ?: string; type?: string; val?: string; value?: string }>;
+};
+
+export type AllowedUserAccess = {
+  authenticated: boolean;
+  allowed: boolean;
+  status: number;
+  reason?: "local-mock-bypass" | "missing-principal" | "missing-user-details" | "missing-allowlist" | "not-allowed";
+  user?: {
+    identityProvider?: string;
+    userDetails: string;
+    userId?: string;
+  };
+};
+
 const azureDevOpsEntraScope = "https://app.vssps.visualstudio.com/.default";
 
 const customerFields = [
@@ -93,6 +113,71 @@ export function getBearerToken(headers: Headers): string | undefined {
   return tokenHeader?.trim();
 }
 
+export function parseAllowedUserUpns(value: string | undefined): string[] {
+  return (value ?? "")
+    .split(",")
+    .map((entry) => normalizeUserIdentifier(entry))
+    .filter((entry): entry is string => Boolean(entry));
+}
+
+export function parseSwaClientPrincipal(headers: Headers): ClientPrincipal | undefined {
+  const encoded = headers.get("x-ms-client-principal");
+  if (!encoded) return undefined;
+
+  try {
+    const parsed = JSON.parse(Buffer.from(encoded, "base64").toString("utf8")) as ClientPrincipal;
+    return parsed && typeof parsed === "object" ? parsed : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+export function getAllowedUserAccess(
+  headers: Headers,
+  env: Record<string, string | undefined> = process.env
+): AllowedUserAccess {
+  if (env.MOCK_MODE === "true" && env.NODE_ENV !== "production") {
+    return {
+      authenticated: true,
+      allowed: true,
+      status: 200,
+      reason: "local-mock-bypass",
+      user: { identityProvider: "mock", userDetails: "dev@fivetwo.local" }
+    };
+  }
+
+  const principal = parseSwaClientPrincipal(headers);
+  const userDetails = normalizeUserIdentifier(getPrincipalUserDetails(principal));
+
+  if (!principal) {
+    return { authenticated: false, allowed: false, status: 401, reason: "missing-principal" };
+  }
+
+  if (!userDetails) {
+    return { authenticated: true, allowed: false, status: 403, reason: "missing-user-details" };
+  }
+
+  const allowedUpns = parseAllowedUserUpns(env.ALLOWED_USER_UPNS);
+  if (allowedUpns.length === 0) {
+    return { authenticated: true, allowed: false, status: 500, reason: "missing-allowlist", user: toAllowedUser(principal, userDetails) };
+  }
+
+  if (!allowedUpns.includes(userDetails)) {
+    return { authenticated: true, allowed: false, status: 403, reason: "not-allowed", user: toAllowedUser(principal, userDetails) };
+  }
+
+  return { authenticated: true, allowed: true, status: 200, user: toAllowedUser(principal, userDetails) };
+}
+
+export function verifyAllowedDashboardUser(headers: Headers) {
+  const access = getAllowedUserAccess(headers);
+  if (!access.allowed) {
+    throw new AuthError(accessErrorMessage(access), access.status);
+  }
+
+  return access.user;
+}
+
 export function verifyCustomerToken(token: string | undefined) {
   const localDevCustomerId = process.env.LOCAL_DEV_CUSTOMER_ID;
   if (!token && localDevCustomerId && process.env.NODE_ENV !== "production") {
@@ -126,6 +211,44 @@ export function verifyCustomerToken(token: string | undefined) {
   if (!payload.customerId) throw new AuthError("Invalid customer token", 401);
   if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) throw new AuthError("Expired customer token", 401);
   return { customerId: payload.customerId, displayName: payload.name };
+}
+
+function accessErrorMessage(access: AllowedUserAccess): string {
+  if (access.reason === "missing-allowlist") return "Allowed users are not configured";
+  if (access.reason === "not-allowed") return "User is not authorized for this dashboard";
+  if (access.reason === "missing-user-details") return "Signed-in user details are not available";
+  return "Sign in required";
+}
+
+function normalizeUserIdentifier(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const normalized = value.trim().toLowerCase();
+  return normalized || undefined;
+}
+
+function getPrincipalUserDetails(principal: ClientPrincipal | undefined): string | undefined {
+  if (!principal) return undefined;
+
+  return (
+    principal.userDetails ||
+    getPrincipalClaim(principal, "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress") ||
+    getPrincipalClaim(principal, "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/upn") ||
+    getPrincipalClaim(principal, "preferred_username") ||
+    getPrincipalClaim(principal, "upn")
+  );
+}
+
+function getPrincipalClaim(principal: ClientPrincipal, claimType: string): string | undefined {
+  const claim = principal.claims?.find((claim) => (claim.typ || claim.type) === claimType);
+  return claim?.val ?? claim?.value;
+}
+
+function toAllowedUser(principal: ClientPrincipal, userDetails: string): AllowedUserAccess["user"] {
+  return {
+    identityProvider: principal.identityProvider,
+    userDetails,
+    userId: principal.userId
+  };
 }
 
 export async function getCustomerWorkItems(customerId: string): Promise<AdoWorkItem[]> {

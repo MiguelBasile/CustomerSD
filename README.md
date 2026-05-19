@@ -62,6 +62,7 @@ ADO_ENTRA_CLIENT_SECRET=
 ADO_ENTRA_SCOPE=https://app.vssps.visualstudio.com/.default
 ADO_CUSTOMER_FIELD=Custom.Customer
 ADO_WORK_ITEM_TYPES=Incident,Major Incident,Service Request,Operational Task,Task,User Story,Feature,Epic,Bug,Issue
+ALLOWED_USER_UPNS=miguel.basile@fivetwo.nz,janicebasile@fivetwo.nz
 CUSTOMER_TOKEN_SECRET=
 NEXT_PUBLIC_MOCK_MODE=true
 MOCK_MODE=true
@@ -104,6 +105,7 @@ For local-only preview without manually pasting a token, set `LOCAL_DEV_CUSTOMER
 - `GET /api/tickets` uses a server-side Entra access token, filters by `ADO_CUSTOMER_FIELD`, and returns customer-safe ticket summaries.
 - `GET /api/tickets/{id}` uses a server-side Entra access token, confirms the ticket belongs to that customer, and returns customer-safe detail, timeline, comments, and SLA data.
 - `GET /api/ado/status` uses the server-side Entra access token to confirm the ADO project and fields endpoint are reachable. It returns only connection metadata, never secrets or access tokens.
+- `GET /api/session` reads the Static Web Apps signed-in principal and reports whether the user is in `ALLOWED_USER_UPNS`.
 
 ## Azure Static Web Apps
 
@@ -114,7 +116,7 @@ For local-only preview without manually pasting a token, set `LOCAL_DEV_CUSTOMER
 - API build command: `npm run build`
 - Node.js build/runtime target: `22`
 - Managed Functions runtime: `node:22`
-- Configure Static Web App application settings for `ADO_ORG`, `ADO_PROJECT`, `ADO_AUTH_MODE=entra`, `ADO_ENTRA_TENANT_ID`, `ADO_ENTRA_CLIENT_ID`, `ADO_ENTRA_CLIENT_SECRET`, `ADO_ENTRA_SCOPE`, `ADO_CUSTOMER_FIELD=Custom.Customer`, `ADO_WORK_ITEM_TYPES`, `CUSTOMER_TOKEN_SECRET`, and `MOCK_MODE=false`.
+- Configure Static Web App application settings for `ADO_ORG`, `ADO_PROJECT`, `ADO_AUTH_MODE=entra`, `ADO_ENTRA_TENANT_ID`, `ADO_ENTRA_CLIENT_ID`, `ADO_ENTRA_CLIENT_SECRET`, `ADO_ENTRA_SCOPE`, `ADO_CUSTOMER_FIELD=Custom.Customer`, `ADO_WORK_ITEM_TYPES`, `ALLOWED_USER_UPNS`, `CUSTOMER_TOKEN_SECRET`, and `MOCK_MODE=false`.
 
 The free tier can host the exported static app and managed Azure Functions API together. Secrets must be configured as Static Web App application settings, never as `NEXT_PUBLIC_*` variables.
 
@@ -135,16 +137,16 @@ In Azure DevOps, add the service principal represented by `ADO_ENTRA_CLIENT_ID` 
 
 Azure Static Web Apps built-in Microsoft Entra sign-in is configured at the route layer:
 
-- `/` and `/ticket?id={ticketId}` require the SWA `customer-dashboard-users` role.
+- `/` and `/ticket?id={ticketId}` require the built-in SWA `authenticated` role.
 - Unauthenticated UI requests redirect to `/.auth/login/aad`.
 - `/login` redirects to `/.auth/login/aad`.
 - `/logout` redirects to `/.auth/logout`.
 - `/.auth/*` remains reachable so the SWA authentication callbacks work.
-- `/api/*` remains reachable at the SWA layer because the Functions validate the signed customer token and return customer-scoped DTOs.
+- `/api/*` remains reachable at the SWA layer because the Functions validate both the signed-in user allowlist and customer token before returning customer-scoped DTOs.
 
 This adds an Entra gate in front of the static dashboard, but it does not replace customer-token authorization. Customers still need a valid customer token for API data access, and the token is still sent only in request headers.
 
-After deployment, invite or assign only approved people to the Static Web Apps role named `customer-dashboard-users`. Users who can sign in but do not have this role cannot load the static dashboard.
+Set `ALLOWED_USER_UPNS` to a comma-separated list of approved Microsoft Entra user principal names. Signed-in users who are not in that list see an unauthorized state and cannot load API data.
 
 The built-in Entra provider works without committing client IDs or secrets. If you later need to restrict sign-in to a specific tenant through a custom Entra app registration, use the Static Web Apps Standard plan and add an `auth.identityProviders.azureActiveDirectory` block in `staticwebapp.config.json` that references app settings for the client ID and secret. Use these callback URLs in the Entra app registration after the SWA URL exists:
 

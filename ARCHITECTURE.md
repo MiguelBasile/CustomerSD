@@ -23,8 +23,9 @@ That separation prevents customer routes from inheriting the developer dashboard
 - Next.js exports the customer UI as static files in `out/`.
 - Azure Functions expose `/api/tickets` and `/api/tickets/{id}`.
 - Azure Functions expose `/api/ado/status` for safe Entra-backed ADO connectivity checks.
+- Azure Functions expose `/api/session` so the static UI can show the current allowlist access state.
 - The repo targets Node.js 22 for local development, GitHub Actions builds, and the Static Web Apps managed Functions runtime.
-- Azure Static Web Apps route rules require the `customer-dashboard-users` role for the static dashboard while leaving `/api/*` token-gated by the Functions.
+- Azure Static Web Apps route rules require the built-in `authenticated` role for the static dashboard while leaving `/api/*` guarded by the Functions.
 - Azure Functions call Azure DevOps REST APIs using a server-side Microsoft Entra service principal token.
 - The browser never calls ADO and never receives raw ADO work items.
 - ADO remains the system of record. No local ticket state is stored.
@@ -125,6 +126,7 @@ const ticket = mockMode ? getMockTicket("contoso", id) : data?.ticket;
 
 - ADO Entra client credentials are read only by `api/shared.ts` in Azure Functions.
 - Azure Functions request ADO access tokens server-side and never return tokens or client secrets to the browser.
+- Signed-in users are checked against `ALLOWED_USER_UPNS` before any ticket, status, or ADO data is returned.
 - Customer tokens are verified on every API request.
 - Customer filtering uses `ADO_CUSTOMER_FIELD`, defaulting to `Custom.Customer`.
 - API responses include only ticket ID, title, customer-safe status, priority, created date, last updated date, progress, sanitized description, customer-safe updates, timeline, and SLA display data.
@@ -163,7 +165,7 @@ npm run dev:api
 - API runtime: `node:22`
 - Entra sign-in path: `/.auth/login/aad`
 - Entra sign-out path: `/.auth/logout`
-- Required UI role: `customer-dashboard-users`
+- Required SWA role: `authenticated`
 - Configure app settings:
   - `ADO_ORG`
   - `ADO_PROJECT`
@@ -174,5 +176,6 @@ npm run dev:api
   - `ADO_ENTRA_SCOPE=https://app.vssps.visualstudio.com/.default`
   - `ADO_CUSTOMER_FIELD=Custom.Customer`
   - `ADO_WORK_ITEM_TYPES`
+  - `ALLOWED_USER_UPNS`
   - `CUSTOMER_TOKEN_SECRET`
   - `MOCK_MODE=false`

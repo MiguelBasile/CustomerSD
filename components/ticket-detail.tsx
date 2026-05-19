@@ -6,6 +6,7 @@ import { format } from "date-fns";
 import useSWR from "swr";
 import { useState } from "react";
 import { StatusProgress } from "./status-progress";
+import { fetchDashboardSession } from "@/lib/dashboard-session";
 import { getMockTicket } from "@/lib/mock-data";
 import type { CustomerTicketDetail } from "@/lib/types";
 
@@ -21,9 +22,15 @@ export function TicketDetail({ ticketId: explicitTicketId }: { ticketId?: string
   const ticketId = explicitTicketId ?? searchParams.get("id") ?? "";
   const id = Number(ticketId);
   const validId = Number.isInteger(id) && id > 0;
+  const {
+    data: session,
+    error: sessionError,
+    isLoading: isSessionLoading
+  } = useSWR(mockMode ? null : "/api/session", fetchDashboardSession, { shouldRetryOnError: false });
+  const accessAllowed = mockMode || session?.allowed === true;
 
   const { data, error, isLoading } = useSWR<TicketDetailResponse, Error, [string, string] | null>(
-    mockMode || !validId ? null : [`/api/tickets/${ticketId}`, token],
+    mockMode || !validId || !accessAllowed ? null : [`/api/tickets/${ticketId}`, token],
     ([url, customerToken]: [string, string]) => fetchJson(url, customerToken)
   );
 
@@ -31,6 +38,24 @@ export function TicketDetail({ ticketId: explicitTicketId }: { ticketId?: string
 
   if (!validId) {
     return <div className="panel empty">Ticket not found.</div>;
+  }
+
+  if (!mockMode && isSessionLoading) {
+    return <div className="panel empty">Checking access...</div>;
+  }
+
+  if (!mockMode && sessionError) {
+    return <div className="panel error">Unable to verify access. Refresh the page or sign in again.</div>;
+  }
+
+  if (!mockMode && !accessAllowed) {
+    return (
+      <section className="panel empty">
+        <h2>Access not authorized</h2>
+        <p>Your signed-in account is not on the dashboard allowlist.</p>
+        <a className="button secondary" href="/logout">Sign out</a>
+      </section>
+    );
   }
 
   if (error?.message === "Ticket not found") {

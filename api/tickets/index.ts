@@ -7,6 +7,7 @@ import {
   applyTicketFilters,
   toTicketSummary,
   getMockTickets,
+  verifyAllowedDashboardUser,
   type TicketFilters
 } from "../shared";
 
@@ -16,6 +17,7 @@ app.http("tickets", {
   route: "tickets",
   handler: async (request: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> => {
     try {
+      verifyAllowedDashboardUser(request.headers);
       const principal = verifyCustomerToken(getBearerToken(request.headers));
       const filters = readFilters(request);
 

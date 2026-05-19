@@ -1,5 +1,5 @@
 import { app, HttpRequest, HttpResponseInit, InvocationContext } from "@azure/functions";
-import { AuthError, getAdoConnectionStatus, getBearerToken, verifyCustomerToken } from "../shared";
+import { AuthError, getAdoConnectionStatus, getBearerToken, verifyAllowedDashboardUser, verifyCustomerToken } from "../shared";
 
 app.http("adoStatus", {
   methods: ["GET"],
@@ -7,6 +7,7 @@ app.http("adoStatus", {
   route: "ado/status",
   handler: async (request: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> => {
     try {
+      verifyAllowedDashboardUser(request.headers);
       verifyCustomerToken(getBearerToken(request.headers));
 
       if (process.env.MOCK_MODE === "true") {

@@ -7,6 +7,7 @@ import { useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { TicketFilters as TicketFiltersControl } from "./ticket-filters";
 import { StatusProgress } from "./status-progress";
+import { fetchDashboardSession } from "@/lib/dashboard-session";
 import { getMockTickets } from "@/lib/mock-data";
 import type { CustomerTicketSummary, TicketFilters } from "@/lib/types";
 
@@ -21,9 +22,15 @@ export function TicketList() {
   const [token, setToken] = useState(() => readStoredToken());
   const query = useMemo(() => new URLSearchParams(compactFilters(filters)).toString(), [filters]);
   const url = query ? `/api/tickets?${query}` : "/api/tickets";
+  const {
+    data: session,
+    error: sessionError,
+    isLoading: isSessionLoading
+  } = useSWR(mockMode ? null : "/api/session", fetchDashboardSession, { shouldRetryOnError: false });
+  const accessAllowed = mockMode || session?.allowed === true;
 
   const { data, error, isLoading } = useSWR<TicketListResponse, Error, [string, string] | null>(
-    mockMode ? null : [url, token],
+    mockMode || !accessAllowed ? null : [url, token],
     ([requestUrl, customerToken]: [string, string]) => fetchJson(requestUrl, customerToken)
   );
 
@@ -49,6 +56,18 @@ export function TicketList() {
 
   return (
     <div className="dashboard-shell">
+      {!mockMode && isSessionLoading && <AccessPanel title="Checking access" body="Confirming your signed-in account." />}
+      {!mockMode && sessionError && <AccessPanel title="Unable to verify access" body="Refresh the page or sign in again." />}
+      {!mockMode && !isSessionLoading && !sessionError && !accessAllowed && (
+        <AccessPanel
+          title="Access not authorized"
+          body="Your signed-in account is not on the dashboard allowlist."
+          action={<a className="button secondary" href="/logout">Sign out</a>}
+        />
+      )}
+
+      {accessAllowed && (
+        <>
       <div className="summary-grid">
         <SummaryCard label="Visible tickets" value={totalTickets} helper="Current customer scope" tone="accent" />
         <SummaryCard label="Active work" value={activeTickets} helper="Open or in progress" tone="active" />
@@ -175,7 +194,19 @@ export function TicketList() {
           </RailCard>
         </aside>
       </div>
+        </>
+      )}
     </div>
+  );
+}
+
+function AccessPanel({ title, body, action }: { title: string; body: string; action?: ReactNode }) {
+  return (
+    <section className="panel empty">
+      <h2>{title}</h2>
+      <p>{body}</p>
+      {action}
+    </section>
   );
 }
 
