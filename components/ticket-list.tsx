@@ -28,9 +28,14 @@ export function TicketList() {
     isLoading: isSessionLoading
   } = useSWR(mockMode ? null : "/api/session", fetchDashboardSession, { shouldRetryOnError: false });
   const accessAllowed = mockMode || session?.allowed === true;
+  const requiresCustomerToken = !mockMode && accessAllowed && session?.customerAuthMode === "customer-token";
+  const customerNotConfigured = !mockMode && accessAllowed && session?.customerAuthMode === "not-configured";
+  const waitingForCustomerToken = requiresCustomerToken && !token;
+  const canLoadTickets = mockMode || (accessAllowed && !customerNotConfigured && !waitingForCustomerToken);
+  const customerLabel = session?.customer?.displayName ?? session?.customer?.customerId;
 
   const { data, error, isLoading } = useSWR<TicketListResponse, Error, [string, string] | null>(
-    mockMode || !accessAllowed ? null : [url, token],
+    mockMode || !canLoadTickets ? null : [url, requiresCustomerToken ? token : ""],
     ([requestUrl, customerToken]: [string, string]) => fetchJson(requestUrl, customerToken)
   );
 
@@ -65,8 +70,15 @@ export function TicketList() {
           action={<a className="button secondary" href="/logout">Sign out</a>}
         />
       )}
+      {!mockMode && customerNotConfigured && (
+        <AccessPanel
+          title="Customer access not configured"
+          body="Your signed-in account is allowed into the dashboard but is not mapped to a customer."
+          action={<a className="button secondary" href="/logout">Sign out</a>}
+        />
+      )}
 
-      {accessAllowed && (
+      {accessAllowed && !customerNotConfigured && (
         <>
       <div className="summary-grid">
         <SummaryCard label="Visible tickets" value={totalTickets} helper="Current customer scope" tone="accent" />
@@ -78,7 +90,13 @@ export function TicketList() {
       <div className="dashboard-grid">
         <section className="panel dashboard-panel">
           {!mockMode && (
-            <div className="token-bar">
+            customerLabel ? (
+              <div className="customer-scope">
+                <span>Customer scope</span>
+                <strong>{customerLabel}</strong>
+              </div>
+            ) : requiresCustomerToken ? (
+              <div className="token-bar">
               <div className="field">
                 <label htmlFor="token">Customer access token</label>
                 <input
@@ -93,7 +111,8 @@ export function TicketList() {
               <button className="button secondary" type="button" onClick={() => updateToken("")}>
                 Clear
               </button>
-            </div>
+              </div>
+            ) : null
           )}
 
           <div className="work-header">
@@ -116,9 +135,16 @@ export function TicketList() {
             <span className="view-tab">Recently Updated - {recentlyUpdated.length}</span>
           </div>
 
-          {error && <div className="error">Unable to load tickets. Check your customer token or try again.</div>}
+          {waitingForCustomerToken && <div className="empty">Customer access token required for this account.</div>}
+          {error && (
+            <div className="error">
+              {requiresCustomerToken
+                ? "Unable to load tickets. Check your customer token or try again."
+                : "Unable to load tickets. Check the customer mapping or ADO permissions."}
+            </div>
+          )}
           {isLoading && <div className="empty">Loading tickets...</div>}
-          {!isLoading && !error && tickets.length === 0 && <div className="empty">No tickets match these filters.</div>}
+          {!isLoading && !error && !waitingForCustomerToken && tickets.length === 0 && <div className="empty">No tickets match these filters.</div>}
 
           {tickets.length > 0 && (
             <table className="ticket-table">

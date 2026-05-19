@@ -1,13 +1,11 @@
 import { app, HttpRequest, HttpResponseInit, InvocationContext } from "@azure/functions";
 import {
-  getBearerToken,
-  verifyCustomerToken,
   AuthError,
   getCustomerWorkItems,
   applyTicketFilters,
   toTicketSummary,
   getMockTickets,
-  verifyAllowedDashboardUser,
+  resolveCustomerPrincipal,
   type TicketFilters
 } from "../shared";
 
@@ -17,8 +15,7 @@ app.http("tickets", {
   route: "tickets",
   handler: async (request: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> => {
     try {
-      verifyAllowedDashboardUser(request.headers);
-      const principal = verifyCustomerToken(getBearerToken(request.headers));
+      const principal = resolveCustomerPrincipal(request.headers);
       const filters = readFilters(request);
 
       if (process.env.MOCK_MODE === "true") {

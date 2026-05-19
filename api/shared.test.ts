@@ -1,11 +1,26 @@
 import { describe, expect, it } from "vitest";
-import { getAllowedUserAccess, parseAllowedUserUpns, parseSwaClientPrincipal, verifyCustomerToken } from "./shared";
+import {
+  getAllowedUserAccess,
+  getMappedCustomerForUser,
+  parseAllowedUserUpns,
+  parseSwaClientPrincipal,
+  parseUserCustomerMap,
+  resolveCustomerPrincipal,
+  verifyCustomerToken
+} from "./shared";
 
 describe("Static Web Apps allowed user access", () => {
   it("parses allowed user UPNs case-insensitively", () => {
     expect(parseAllowedUserUpns(" Miguel.Basile@FiveTwo.nz, janicebasile@fivetwo.nz ")).toEqual([
       "miguel.basile@fivetwo.nz",
       "janicebasile@fivetwo.nz"
+    ]);
+  });
+
+  it("parses user-to-customer mappings while preserving customer ids", () => {
+    expect(parseUserCustomerMap(" Miguel.Basile@FiveTwo.nz=FiveTwo, janicebasile@fivetwo.nz=fivetwo ")).toEqual([
+      { userDetails: "miguel.basile@fivetwo.nz", customerId: "FiveTwo", displayName: "FiveTwo" },
+      { userDetails: "janicebasile@fivetwo.nz", customerId: "fivetwo", displayName: "fivetwo" }
     ]);
   });
 
@@ -45,6 +60,33 @@ describe("Static Web Apps allowed user access", () => {
     expect(access.status).toBe(200);
     expect(access.allowed).toBe(true);
     expect(access.user?.userDetails).toBe("miguel.basile@fivetwo.nz");
+  });
+
+  it("maps an allowlisted user to a customer without a customer token", () => {
+    const env = liveEnv({ USER_CUSTOMER_MAP: "miguel.basile@fivetwo.nz=fivetwo" });
+
+    expect(getMappedCustomerForUser("Miguel.Basile@FiveTwo.nz", env)).toEqual({
+      customerId: "fivetwo",
+      displayName: "fivetwo"
+    });
+    expect(resolveCustomerPrincipal(principalHeaders("Miguel.Basile@FiveTwo.nz"), env)).toEqual({
+      customerId: "fivetwo",
+      displayName: "fivetwo"
+    });
+  });
+
+  it("falls back to customer token auth when no user customer mapping exists", () => {
+    const env = liveEnv({ USER_CUSTOMER_MAP: "", CUSTOMER_TOKEN_SECRET: "test-secret" });
+
+    expect(() => resolveCustomerPrincipal(principalHeaders("Miguel.Basile@FiveTwo.nz"), env)).toThrow("Missing customer token");
+  });
+
+  it("blocks customer access when mappings are configured but the signed-in user is not mapped", () => {
+    const env = liveEnv({ USER_CUSTOMER_MAP: "other@fivetwo.nz=other-customer", CUSTOMER_TOKEN_SECRET: "test-secret" });
+
+    expect(() => resolveCustomerPrincipal(principalHeaders("Miguel.Basile@FiveTwo.nz"), env)).toThrow(
+      "Customer access is not configured for this account"
+    );
   });
 
   it("still requires the customer token after allowlist access succeeds", () => {

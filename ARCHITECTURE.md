@@ -29,7 +29,7 @@ That separation prevents customer routes from inheriting the developer dashboard
 - Azure Functions call Azure DevOps REST APIs using a server-side Microsoft Entra service principal token.
 - The browser never calls ADO and never receives raw ADO work items.
 - ADO remains the system of record. No local ticket state is stored.
-- `api/shared.ts` converts raw ADO work items into customer-safe DTOs through an allowlist and validates signed customer tokens.
+- `api/shared.ts` converts raw ADO work items into customer-safe DTOs, validates signed-in users, and maps user emails to customer scopes.
 
 ## Updated Folder Structure
 
@@ -42,6 +42,7 @@ api/
   host.json
   package.json
   tsconfig.json
+  session.ts
   shared.ts
   tickets/index.ts
   tickets/[id].ts
@@ -53,6 +54,7 @@ components/
   ticket-list.tsx
 lib/
   customer-ticket-mapper.ts
+  dashboard-session.ts
   mock-data.ts
   types.ts
 public/
@@ -104,7 +106,7 @@ export async function adoFetch(path: string, init: RequestInit = {}) {
 
 ```tsx
 const { data, error, isLoading } = useSWR(
-  mockMode ? null : [url, token],
+  mockMode || !canLoadTickets ? null : [url, token],
   ([requestUrl, customerToken]) => fetchJson(requestUrl, customerToken)
 );
 
@@ -115,7 +117,7 @@ const tickets = mockMode ? getMockTickets("contoso", filters) : data?.tickets ??
 
 ```tsx
 const { data } = useSWR(
-  mockMode ? null : [`/api/tickets/${ticketId}`, token],
+  mockMode || !canLoadTicket ? null : [`/api/tickets/${ticketId}`, token],
   ([url, customerToken]) => fetchJson(url, customerToken)
 );
 
@@ -127,12 +129,13 @@ const ticket = mockMode ? getMockTicket("contoso", id) : data?.ticket;
 - ADO Entra client credentials are read only by `api/shared.ts` in Azure Functions.
 - Azure Functions request ADO access tokens server-side and never return tokens or client secrets to the browser.
 - Signed-in users are checked against `ALLOWED_USER_UPNS` before any ticket, status, or ADO data is returned.
-- Customer tokens are verified on every API request.
+- `USER_CUSTOMER_MAP` maps signed-in user emails to their allowed customer ID, so mapped users do not paste customer tokens.
+- Customer tokens remain available only as a fallback when no `USER_CUSTOMER_MAP` is configured.
 - Customer filtering uses `ADO_CUSTOMER_FIELD`, defaulting to `Custom.Customer`.
 - API responses include only ticket ID, title, customer-safe status, priority, created date, last updated date, progress, sanitized description, customer-safe updates, timeline, and SLA display data.
 - Assignee emails, internal comments, security notes, raw ADO fields, and internal tags are never serialized.
 - Real ADO comments are shown only when explicitly tagged `[customer]`; comments tagged `[internal]`, `[private]`, `[security]`, `internal note:`, or `engineer note:` are always blocked.
-- Customer tokens are stored in browser local storage for MVP preview and are not placed in ticket URLs.
+- Fallback customer tokens are stored in browser local storage and are not placed in ticket URLs.
 
 ## Local Run
 
@@ -177,5 +180,6 @@ npm run dev:api
   - `ADO_CUSTOMER_FIELD=Custom.Customer`
   - `ADO_WORK_ITEM_TYPES`
   - `ALLOWED_USER_UPNS`
+  - `USER_CUSTOMER_MAP`
   - `CUSTOMER_TOKEN_SECRET`
   - `MOCK_MODE=false`

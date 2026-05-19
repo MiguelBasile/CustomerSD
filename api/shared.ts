@@ -52,6 +52,17 @@ type ClientPrincipal = {
   claims?: Array<{ typ?: string; type?: string; val?: string; value?: string }>;
 };
 
+export type CustomerPrincipal = {
+  customerId: string;
+  displayName?: string;
+};
+
+export type UserCustomerMapping = {
+  userDetails: string;
+  customerId: string;
+  displayName?: string;
+};
+
 export type AllowedUserAccess = {
   authenticated: boolean;
   allowed: boolean;
@@ -120,6 +131,24 @@ export function parseAllowedUserUpns(value: string | undefined): string[] {
     .filter((entry): entry is string => Boolean(entry));
 }
 
+export function parseUserCustomerMap(value: string | undefined): UserCustomerMapping[] {
+  return (value ?? "")
+    .split(",")
+    .map((entry) => {
+      const trimmed = entry.trim();
+      const separatorIndex = getMappingSeparatorIndex(trimmed);
+      if (separatorIndex <= 0) return undefined;
+
+      const userDetails = normalizeUserIdentifier(trimmed.slice(0, separatorIndex));
+      const customerValue = trimmed.slice(separatorIndex + 1).trim();
+      const [customerId, displayName] = customerValue.split("|").map((part) => part.trim());
+      if (!userDetails || !customerId) return undefined;
+
+      return { userDetails, customerId, displayName: displayName || customerId };
+    })
+    .filter((entry): entry is UserCustomerMapping => Boolean(entry));
+}
+
 export function parseSwaClientPrincipal(headers: Headers): ClientPrincipal | undefined {
   const encoded = headers.get("x-ms-client-principal");
   if (!encoded) return undefined;
@@ -169,8 +198,8 @@ export function getAllowedUserAccess(
   return { authenticated: true, allowed: true, status: 200, user: toAllowedUser(principal, userDetails) };
 }
 
-export function verifyAllowedDashboardUser(headers: Headers) {
-  const access = getAllowedUserAccess(headers);
+export function verifyAllowedDashboardUser(headers: Headers, env: Record<string, string | undefined> = process.env) {
+  const access = getAllowedUserAccess(headers, env);
   if (!access.allowed) {
     throw new AuthError(accessErrorMessage(access), access.status);
   }
@@ -178,17 +207,55 @@ export function verifyAllowedDashboardUser(headers: Headers) {
   return access.user;
 }
 
-export function verifyCustomerToken(token: string | undefined) {
-  const localDevCustomerId = process.env.LOCAL_DEV_CUSTOMER_ID;
-  if (!token && localDevCustomerId && process.env.NODE_ENV !== "production") {
+export function resolveCustomerPrincipal(
+  headers: Headers,
+  env: Record<string, string | undefined> = process.env
+): CustomerPrincipal {
+  const user = verifyAllowedDashboardUser(headers, env);
+  const mappedCustomer = getMappedCustomerForUser(user?.userDetails, env);
+
+  if (mappedCustomer) {
+    return mappedCustomer;
+  }
+
+  if (isUserCustomerMapConfigured(env)) {
+    throw new AuthError("Customer access is not configured for this account", 403);
+  }
+
+  return verifyCustomerToken(getBearerToken(headers), env);
+}
+
+export function getMappedCustomerForUser(
+  userDetails: string | undefined,
+  env: Record<string, string | undefined> = process.env
+): CustomerPrincipal | undefined {
+  const normalizedUser = normalizeUserIdentifier(userDetails);
+  if (!normalizedUser) return undefined;
+
+  const mapping = parseUserCustomerMap(env.USER_CUSTOMER_MAP).find((entry) => entry.userDetails === normalizedUser);
+  if (!mapping) return undefined;
+
+  return { customerId: mapping.customerId, displayName: mapping.displayName };
+}
+
+export function isUserCustomerMapConfigured(env: Record<string, string | undefined> = process.env): boolean {
+  return Boolean(env.USER_CUSTOMER_MAP?.trim());
+}
+
+export function verifyCustomerToken(
+  token: string | undefined,
+  env: Record<string, string | undefined> = process.env
+): CustomerPrincipal {
+  const localDevCustomerId = env.LOCAL_DEV_CUSTOMER_ID;
+  if (!token && localDevCustomerId && env.NODE_ENV !== "production") {
     return { customerId: localDevCustomerId, displayName: localDevCustomerId };
   }
 
-  if (process.env.MOCK_MODE === "true" && !token) {
+  if (env.MOCK_MODE === "true" && !token) {
     return { customerId: "contoso", displayName: "Contoso" };
   }
 
-  const secret = process.env.CUSTOMER_TOKEN_SECRET;
+  const secret = env.CUSTOMER_TOKEN_SECRET;
   if (!secret) throw new AuthError("Customer token secret is not configured", 500);
   if (!token) throw new AuthError("Missing customer token", 401);
 
@@ -218,6 +285,12 @@ function accessErrorMessage(access: AllowedUserAccess): string {
   if (access.reason === "not-allowed") return "User is not authorized for this dashboard";
   if (access.reason === "missing-user-details") return "Signed-in user details are not available";
   return "Sign in required";
+}
+
+function getMappingSeparatorIndex(value: string): number {
+  const equalsIndex = value.indexOf("=");
+  if (equalsIndex >= 0) return equalsIndex;
+  return value.indexOf(":");
 }
 
 function normalizeUserIdentifier(value: unknown): string | undefined {

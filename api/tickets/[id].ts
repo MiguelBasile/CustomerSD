@@ -3,12 +3,10 @@ import {
   getCustomerWorkItemById,
   getWorkItemComments,
   getWorkItemRevisions,
-  getBearerToken,
-  verifyCustomerToken,
   AuthError,
   toTicketDetail,
   getMockTicket,
-  verifyAllowedDashboardUser
+  resolveCustomerPrincipal
 } from "../shared";
 
 app.http("ticketDetail", {
@@ -17,8 +15,7 @@ app.http("ticketDetail", {
   route: "tickets/{id:int}",
   handler: async (request: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> => {
     try {
-      verifyAllowedDashboardUser(request.headers);
-      const principal = verifyCustomerToken(getBearerToken(request.headers));
+      const principal = resolveCustomerPrincipal(request.headers);
       const id = Number(request.params.id);
 
       if (!Number.isInteger(id) || id <= 0) {

@@ -7,6 +7,11 @@ export type DashboardSession = {
     userDetails: string;
     userId?: string;
   };
+  customer?: {
+    customerId: string;
+    displayName?: string;
+  };
+  customerAuthMode?: "entra-user-map" | "customer-token" | "not-configured";
 };
 
 export async function fetchDashboardSession(): Promise<DashboardSession> {
@@ -22,7 +27,9 @@ export async function fetchDashboardSession(): Promise<DashboardSession> {
       authenticated: Boolean(body.authenticated),
       allowed: false,
       reason: body.reason,
-      user: body.user
+      user: body.user,
+      customer: body.customer,
+      customerAuthMode: body.customerAuthMode
     };
   }
 
@@ -34,6 +41,8 @@ export async function fetchDashboardSession(): Promise<DashboardSession> {
     authenticated: Boolean(body.authenticated),
     allowed: Boolean(body.allowed),
     reason: body.reason,
-    user: body.user
+    user: body.user,
+    customer: body.customer,
+    customerAuthMode: body.customerAuthMode
   };
 }

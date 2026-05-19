@@ -28,9 +28,13 @@ export function TicketDetail({ ticketId: explicitTicketId }: { ticketId?: string
     isLoading: isSessionLoading
   } = useSWR(mockMode ? null : "/api/session", fetchDashboardSession, { shouldRetryOnError: false });
   const accessAllowed = mockMode || session?.allowed === true;
+  const requiresCustomerToken = !mockMode && accessAllowed && session?.customerAuthMode === "customer-token";
+  const customerNotConfigured = !mockMode && accessAllowed && session?.customerAuthMode === "not-configured";
+  const waitingForCustomerToken = requiresCustomerToken && !token;
+  const canLoadTicket = mockMode || (validId && accessAllowed && !customerNotConfigured && !waitingForCustomerToken);
 
   const { data, error, isLoading } = useSWR<TicketDetailResponse, Error, [string, string] | null>(
-    mockMode || !validId || !accessAllowed ? null : [`/api/tickets/${ticketId}`, token],
+    mockMode || !canLoadTicket ? null : [`/api/tickets/${ticketId}`, requiresCustomerToken ? token : ""],
     ([url, customerToken]: [string, string]) => fetchJson(url, customerToken)
   );
 
@@ -58,12 +62,32 @@ export function TicketDetail({ ticketId: explicitTicketId }: { ticketId?: string
     );
   }
 
+  if (customerNotConfigured) {
+    return (
+      <section className="panel empty">
+        <h2>Customer access not configured</h2>
+        <p>Your signed-in account is allowed into the dashboard but is not mapped to a customer.</p>
+        <a className="button secondary" href="/logout">Sign out</a>
+      </section>
+    );
+  }
+
   if (error?.message === "Ticket not found") {
     return <div className="panel empty">Ticket not found.</div>;
   }
 
+  if (waitingForCustomerToken) {
+    return <div className="panel empty">Customer access token required for this account.</div>;
+  }
+
   if (error) {
-    return <div className="panel error">Unable to load this ticket. Check your customer token or try again.</div>;
+    return (
+      <div className="panel error">
+        {requiresCustomerToken
+          ? "Unable to load this ticket. Check your customer token or try again."
+          : "Unable to load this ticket. Check the customer mapping or ADO permissions."}
+      </div>
+    );
   }
 
   if (isLoading || !ticket) {
