@@ -129,7 +129,7 @@ export function verifyCustomerToken(token: string | undefined) {
 }
 
 export async function getCustomerWorkItems(customerId: string): Promise<AdoWorkItem[]> {
-  const customerField = process.env.ADO_CUSTOMER_FIELD || "Custom.CustomerId";
+  const customerField = process.env.ADO_CUSTOMER_FIELD || "Custom.Customer";
   const workItemTypes = getConfiguredWorkItemTypes();
   const wiql = {
     query: `
@@ -165,13 +165,13 @@ export async function getAdoConnectionStatus() {
     org,
     project,
     authMode: getAdoAuthMode(),
-    customerField: process.env.ADO_CUSTOMER_FIELD || "Custom.CustomerId",
+    customerField: process.env.ADO_CUSTOMER_FIELD || "Custom.Customer",
     availableFieldCount: Array.isArray(fieldsResponse.value) ? fieldsResponse.value.length : 0
   };
 }
 
 export async function getCustomerWorkItemById(customerId: string, id: number): Promise<AdoWorkItem | undefined> {
-  const customerField = process.env.ADO_CUSTOMER_FIELD || "Custom.CustomerId";
+  const customerField = process.env.ADO_CUSTOMER_FIELD || "Custom.Customer";
   let workItem: AdoWorkItem;
 
   try {
@@ -283,13 +283,16 @@ export function applyTicketFilters<T extends ReturnType<typeof toTicketSummary>>
 }
 
 export function getMockTickets(customerId: string, filters: TicketFilters) {
-  const items = mockWorkItems.filter((item) => String(item.fields["Custom.CustomerId"]).toLowerCase() === customerId.toLowerCase());
+  const customerField = process.env.ADO_CUSTOMER_FIELD || "Custom.Customer";
+  const items = mockWorkItems.filter((item) => String(item.fields[customerField] ?? "").toLowerCase() === customerId.toLowerCase());
   return applyTicketFilters(items.map(toTicketSummary), filters);
 }
 
 export function getMockTicket(customerId: string, id: number) {
+  const customerField = process.env.ADO_CUSTOMER_FIELD || "Custom.Customer";
   const item = mockWorkItems.find(
-    (workItem) => workItem.id === id && String(workItem.fields["Custom.CustomerId"]).toLowerCase() === customerId.toLowerCase()
+    (workItem) =>
+      workItem.id === id && String(workItem.fields[customerField] ?? "").toLowerCase() === customerId.toLowerCase()
   );
   return item ? toTicketDetail(item, mockComments[id] ?? [], mockRevisions[id] ?? []) : undefined;
 }
@@ -442,7 +445,7 @@ const mockWorkItems: AdoWorkItem[] = [
       "System.ChangedDate": "2026-05-01T01:30:00.000Z",
       "System.Description": "<p>Users are seeing an access denied message after login.</p>",
       "Microsoft.VSTS.Common.Priority": 1,
-      "Custom.CustomerId": "contoso",
+      "Custom.Customer": "contoso",
       "Custom.SlaDueDate": "2026-05-01T04:00:00.000Z"
     }
   },
@@ -456,7 +459,7 @@ const mockWorkItems: AdoWorkItem[] = [
       "System.ChangedDate": "2026-04-30T23:12:00.000Z",
       "System.Description": "<p>Provision laptop and standard application bundle.</p>",
       "Microsoft.VSTS.Common.Priority": 3,
-      "Custom.CustomerId": "contoso"
+      "Custom.Customer": "contoso"
     }
   }
 ];

@@ -60,7 +60,7 @@ ADO_ENTRA_TENANT_ID=
 ADO_ENTRA_CLIENT_ID=
 ADO_ENTRA_CLIENT_SECRET=
 ADO_ENTRA_SCOPE=https://app.vssps.visualstudio.com/.default
-ADO_CUSTOMER_FIELD=Custom.CustomerId
+ADO_CUSTOMER_FIELD=Custom.Customer
 ADO_WORK_ITEM_TYPES=Incident,Major Incident,Service Request,Operational Task,Task,User Story,Feature,Epic,Bug,Issue
 CUSTOMER_TOKEN_SECRET=
 NEXT_PUBLIC_MOCK_MODE=true
@@ -114,7 +114,7 @@ For local-only preview without manually pasting a token, set `LOCAL_DEV_CUSTOMER
 - API build command: `npm run build`
 - Node.js build/runtime target: `22`
 - Managed Functions runtime: `node:22`
-- Configure Static Web App application settings for `ADO_ORG`, `ADO_PROJECT`, `ADO_AUTH_MODE=entra`, `ADO_ENTRA_TENANT_ID`, `ADO_ENTRA_CLIENT_ID`, `ADO_ENTRA_CLIENT_SECRET`, `ADO_ENTRA_SCOPE`, `ADO_CUSTOMER_FIELD`, `ADO_WORK_ITEM_TYPES`, `CUSTOMER_TOKEN_SECRET`, and `MOCK_MODE=false`.
+- Configure Static Web App application settings for `ADO_ORG`, `ADO_PROJECT`, `ADO_AUTH_MODE=entra`, `ADO_ENTRA_TENANT_ID`, `ADO_ENTRA_CLIENT_ID`, `ADO_ENTRA_CLIENT_SECRET`, `ADO_ENTRA_SCOPE`, `ADO_CUSTOMER_FIELD=Custom.Customer`, `ADO_WORK_ITEM_TYPES`, `CUSTOMER_TOKEN_SECRET`, and `MOCK_MODE=false`.
 
 The free tier can host the exported static app and managed Azure Functions API together. Secrets must be configured as Static Web App application settings, never as `NEXT_PUBLIC_*` variables.
 

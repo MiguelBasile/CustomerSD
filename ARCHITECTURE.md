@@ -126,7 +126,7 @@ const ticket = mockMode ? getMockTicket("contoso", id) : data?.ticket;
 - ADO Entra client credentials are read only by `api/shared.ts` in Azure Functions.
 - Azure Functions request ADO access tokens server-side and never return tokens or client secrets to the browser.
 - Customer tokens are verified on every API request.
-- Customer filtering uses `ADO_CUSTOMER_FIELD`, defaulting to `Custom.CustomerId`.
+- Customer filtering uses `ADO_CUSTOMER_FIELD`, defaulting to `Custom.Customer`.
 - API responses include only ticket ID, title, customer-safe status, priority, created date, last updated date, progress, sanitized description, customer-safe updates, timeline, and SLA display data.
 - Assignee emails, internal comments, security notes, raw ADO fields, and internal tags are never serialized.
 - Real ADO comments are shown only when explicitly tagged `[customer]`; comments tagged `[internal]`, `[private]`, `[security]`, `internal note:`, or `engineer note:` are always blocked.
@@ -172,7 +172,7 @@ npm run dev:api
   - `ADO_ENTRA_CLIENT_ID`
   - `ADO_ENTRA_CLIENT_SECRET`
   - `ADO_ENTRA_SCOPE=https://app.vssps.visualstudio.com/.default`
-  - `ADO_CUSTOMER_FIELD`
+  - `ADO_CUSTOMER_FIELD=Custom.Customer`
   - `ADO_WORK_ITEM_TYPES`
   - `CUSTOMER_TOKEN_SECRET`
   - `MOCK_MODE=false`

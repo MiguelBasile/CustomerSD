@@ -12,7 +12,7 @@ const mockWorkItems: AdoWorkItem[] = [
       "System.ChangedDate": "2026-05-01T01:30:00.000Z",
       "System.Description": "<p>Users are seeing an access denied message after login.</p>",
       "Microsoft.VSTS.Common.Priority": 1,
-      "Custom.CustomerId": "contoso",
+      "Custom.Customer": "contoso",
       "Custom.SlaDueDate": "2026-05-01T04:00:00.000Z"
     }
   },
@@ -26,7 +26,7 @@ const mockWorkItems: AdoWorkItem[] = [
       "System.ChangedDate": "2026-04-30T23:12:00.000Z",
       "System.Description": "<p>Provision laptop and standard application bundle.</p>",
       "Microsoft.VSTS.Common.Priority": 3,
-      "Custom.CustomerId": "contoso"
+      "Custom.Customer": "contoso"
     }
   },
   {
@@ -39,7 +39,7 @@ const mockWorkItems: AdoWorkItem[] = [
       "System.ChangedDate": "2026-04-30T18:20:00.000Z",
       "System.Description": "<p>Inbound email delivery was delayed for a subset of users.</p>",
       "Microsoft.VSTS.Common.Priority": 2,
-      "Custom.CustomerId": "contoso"
+      "Custom.Customer": "contoso"
     }
   }
 ];
@@ -92,7 +92,7 @@ const mockRevisions: Record<number, AdoRevision[]> = {
 };
 
 export function getMockTickets(customerId: string, filters: TicketFilters): CustomerTicketSummary[] {
-  const customerField = process.env.ADO_CUSTOMER_FIELD || "Custom.CustomerId";
+  const customerField = process.env.ADO_CUSTOMER_FIELD || "Custom.Customer";
   const tickets = mockWorkItems
     .filter((item) => String(item.fields[customerField] ?? "").toLowerCase() === customerId.toLowerCase())
     .map(toTicketSummary);
@@ -101,7 +101,7 @@ export function getMockTickets(customerId: string, filters: TicketFilters): Cust
 }
 
 export function getMockTicket(customerId: string, id: number): CustomerTicketDetail | undefined {
-  const customerField = process.env.ADO_CUSTOMER_FIELD || "Custom.CustomerId";
+  const customerField = process.env.ADO_CUSTOMER_FIELD || "Custom.Customer";
   const item = mockWorkItems.find(
     (workItem) =>
       workItem.id === id && String(workItem.fields[customerField] ?? "").toLowerCase() === customerId.toLowerCase()

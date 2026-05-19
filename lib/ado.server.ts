@@ -37,7 +37,7 @@ export async function adoFetch(path: string, init: RequestInit = {}) {
 }
 
 export async function getCustomerWorkItems(customerId: string, filters: TicketFilters): Promise<AdoWorkItem[]> {
-  const customerField = process.env.ADO_CUSTOMER_FIELD || "Custom.CustomerId";
+  const customerField = process.env.ADO_CUSTOMER_FIELD || "Custom.Customer";
   const conditions = [
     `[${customerField}] = '${escapeWiql(customerId)}'`,
     "[System.WorkItemType] IN ('Incident', 'Major Incident', 'Service Request', 'Operational Task', 'Bug', 'Issue')"
@@ -64,7 +64,7 @@ export async function getCustomerWorkItems(customerId: string, filters: TicketFi
 }
 
 export async function getCustomerWorkItemById(customerId: string, id: number): Promise<AdoWorkItem | undefined> {
-  const customerField = process.env.ADO_CUSTOMER_FIELD || "Custom.CustomerId";
+  const customerField = process.env.ADO_CUSTOMER_FIELD || "Custom.Customer";
   const workItem = await getWorkItem(id, [...CUSTOMER_FIELDS, customerField]);
   const owner = String(workItem.fields[customerField] ?? "").toLowerCase();
 
