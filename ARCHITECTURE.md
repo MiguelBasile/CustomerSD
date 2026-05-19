@@ -23,6 +23,8 @@ That separation prevents customer routes from inheriting the developer dashboard
 - Next.js exports the customer UI as static files in `out/`.
 - Azure Functions expose `/api/tickets` and `/api/tickets/{id}`.
 - Azure Functions expose `/api/ado/status` for safe PAT-backed ADO connectivity checks.
+- The repo targets Node.js 22 for local development, GitHub Actions builds, and the Static Web Apps managed Functions runtime.
+- Azure Static Web Apps route rules require Microsoft Entra authenticated users for the static dashboard while leaving `/api/*` token-gated by the Functions.
 - Azure Functions call Azure DevOps REST APIs using `ADO_PAT`.
 - The browser never calls ADO and never receives raw ADO work items.
 - ADO remains the system of record. No local ticket state is stored.
@@ -57,6 +59,7 @@ public/
 staticwebapp.config.json
 package.json
 next.config.mjs
+.nvmrc
 .env.example
 README.md
 ```
@@ -145,6 +148,10 @@ npm run dev:api
 - Build command: `npm run build`
 - Output location: `out`
 - API build command: `npm run build`
+- Node.js build/runtime target: `22`
+- API runtime: `node:22`
+- Entra sign-in path: `/.auth/login/aad`
+- Entra sign-out path: `/.auth/logout`
 - Configure app settings:
   - `ADO_ORG`
   - `ADO_PROJECT`

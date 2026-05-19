@@ -3,12 +3,24 @@ name: Azure Static Web Apps CI/CD
 on:
   workflow_dispatch:
 
+env:
+  NODE_VERSION: "22"
+
 jobs:
   build_and_deploy_job:
     runs-on: ubuntu-latest
     name: Build and Deploy
     steps:
       - uses: actions/checkout@v4
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Confirm Node.js build runtime
+        run: node --version
 
       - name: Build And Deploy
         id: builddeploy
@@ -24,3 +36,4 @@ jobs:
           api_build_command: npm run build
         env:
           NEXT_PUBLIC_MOCK_MODE: "false"
+          NODE_VERSION: ${{ env.NODE_VERSION }}
