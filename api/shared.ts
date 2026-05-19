@@ -37,6 +37,15 @@ type AdoRevision = {
   fields?: Record<string, unknown>;
 };
 
+type AdoAuthMode = "entra" | "pat";
+
+type EntraTokenCache = {
+  accessToken: string;
+  expiresAt: number;
+};
+
+const azureDevOpsEntraScope = "https://app.vssps.visualstudio.com/.default";
+
 const customerFields = [
   "System.Id",
   "System.Title",
@@ -53,6 +62,7 @@ const customerFields = [
 const standardFlow: CustomerStatus[] = ["New", "Investigating", "Waiting", "Resolved", "Closed"];
 const majorFlow: CustomerStatus[] = ["New", "Declared", "Investigating", "Identified", "Mitigated", "Monitoring", "Closed"];
 const internalPatterns = [/\[internal\]/i, /\[private\]/i, /\[security\]/i, /internal note:/i, /engineer note:/i];
+let entraTokenCache: EntraTokenCache | undefined;
 
 export class AuthError extends Error {
   status: number;
@@ -147,7 +157,6 @@ export async function getCustomerWorkItems(customerId: string): Promise<AdoWorkI
 export async function getAdoConnectionStatus() {
   const org = requireEnv("ADO_ORG");
   const project = requireEnv("ADO_PROJECT");
-  requireEnv("ADO_PAT");
 
   const fieldsResponse = await adoFetch("wit/fields?api-version=7.1");
 
@@ -155,6 +164,7 @@ export async function getAdoConnectionStatus() {
     connected: true,
     org,
     project,
+    authMode: getAdoAuthMode(),
     customerField: process.env.ADO_CUSTOMER_FIELD || "Custom.CustomerId",
     availableFieldCount: Array.isArray(fieldsResponse.value) ? fieldsResponse.value.length : 0
   };
@@ -192,13 +202,12 @@ export async function getWorkItemRevisions(id: number): Promise<AdoRevision[]> {
 export async function adoFetch(path: string, init: RequestInit = {}) {
   const org = requireEnv("ADO_ORG");
   const project = requireEnv("ADO_PROJECT");
-  const pat = requireEnv("ADO_PAT");
-  const auth = Buffer.from(`:${pat}`).toString("base64");
+  const authorization = await getAdoAuthorizationHeader();
 
   const response = await fetch(`https://dev.azure.com/${encodeURIComponent(org)}/${encodeURIComponent(project)}/_apis/${path}`, {
     ...init,
     headers: {
-      Authorization: `Basic ${auth}`,
+      Authorization: authorization,
       Accept: "application/json",
       "Content-Type": "application/json",
       ...init.headers
@@ -349,6 +358,70 @@ function requireEnv(name: string): string {
   const value = process.env[name];
   if (!value) throw new Error(`${name} is not configured`);
   return value;
+}
+
+function getAdoAuthMode(): AdoAuthMode {
+  const mode = (process.env.ADO_AUTH_MODE || "entra").trim().toLowerCase();
+
+  if (mode === "entra" || mode === "aad" || mode === "service-principal") return "entra";
+  if (mode === "pat") return "pat";
+
+  throw new Error(`Unsupported ADO_AUTH_MODE "${mode}". Use "entra" or "pat".`);
+}
+
+async function getAdoAuthorizationHeader(): Promise<string> {
+  if (getAdoAuthMode() === "pat") {
+    const auth = Buffer.from(`:${requireEnv("ADO_PAT")}`).toString("base64");
+    return `Basic ${auth}`;
+  }
+
+  return `Bearer ${await getAdoEntraAccessToken()}`;
+}
+
+async function getAdoEntraAccessToken(): Promise<string> {
+  const now = Date.now();
+  if (entraTokenCache && entraTokenCache.expiresAt - 60_000 > now) {
+    return entraTokenCache.accessToken;
+  }
+
+  const tenantId = requireEnv("ADO_ENTRA_TENANT_ID");
+  const clientId = requireEnv("ADO_ENTRA_CLIENT_ID");
+  const clientSecret = requireEnv("ADO_ENTRA_CLIENT_SECRET");
+  const scope = process.env.ADO_ENTRA_SCOPE || azureDevOpsEntraScope;
+  const body = new URLSearchParams({
+    client_id: clientId,
+    client_secret: clientSecret,
+    grant_type: "client_credentials",
+    scope
+  });
+
+  const response = await fetch(`https://login.microsoftonline.com/${encodeURIComponent(tenantId)}/oauth2/v2.0/token`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded"
+    },
+    body
+  });
+
+  if (!response.ok) {
+    throw new AdoRequestError(`ADO Entra token request failed: ${response.status}`, response.status);
+  }
+
+  const token = (await response.json()) as {
+    access_token?: string;
+    expires_in?: number;
+  };
+
+  if (!token.access_token) {
+    throw new Error("ADO Entra token response did not include an access token");
+  }
+
+  entraTokenCache = {
+    accessToken: token.access_token,
+    expiresAt: now + Math.max(60, token.expires_in ?? 3600) * 1000
+  };
+
+  return token.access_token;
 }
 
 function getConfiguredWorkItemTypes(): string[] {

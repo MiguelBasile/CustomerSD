@@ -7,7 +7,7 @@ Secure customer-facing dashboard for Azure DevOps tickets.
 - Next.js exports the customer UI as static HTML/CSS/JS into `out/`.
 - Azure Static Web Apps serves the static UI on the free tier.
 - Managed Azure Functions in `api/` serve `/api/tickets` and `/api/tickets/{id}`.
-- Azure Functions also serve `/api/ado/status` so you can verify that the configured ADO PAT can reach the project.
+- Azure Functions also serve `/api/ado/status` so you can verify that the configured Entra service principal can reach the ADO project.
 - The browser never calls Azure DevOps directly.
 - Azure DevOps remains the system of record. The app does not store ticket state.
 - API responses are allowlisted customer DTOs, not raw ADO work items.
@@ -40,7 +40,7 @@ Use Node.js 22 for the web app and the Functions API. The repo includes `.nvmrc`
    http://localhost:3000
    ```
 
-Mock mode is enabled by default. To use real ADO data, set `NEXT_PUBLIC_MOCK_MODE=false`, `MOCK_MODE=false`, fill in the ADO env vars, and run Azure Functions with:
+Mock mode is enabled by default. To use real ADO data, set `NEXT_PUBLIC_MOCK_MODE=false`, `MOCK_MODE=false`, fill in the ADO and Entra env vars, and run Azure Functions with:
 
 ```bash
 npm run dev:api
@@ -48,21 +48,28 @@ npm run dev:api
 
 For local Functions settings, copy `api/local.settings.example.json` to `api/local.settings.json`.
 
-The ADO PAT belongs only in `api/local.settings.json` or Azure Static Web App application settings. It is never entered into the dashboard UI.
+ADO access credentials belong only in `api/local.settings.json` or Azure Static Web App application settings. They are never entered into the dashboard UI.
 
 ## Required Environment Variables
 
 ```env
 ADO_ORG=
 ADO_PROJECT=
-ADO_PAT=
+ADO_AUTH_MODE=entra
+ADO_ENTRA_TENANT_ID=
+ADO_ENTRA_CLIENT_ID=
+ADO_ENTRA_CLIENT_SECRET=
+ADO_ENTRA_SCOPE=https://app.vssps.visualstudio.com/.default
 ADO_CUSTOMER_FIELD=Custom.CustomerId
+ADO_WORK_ITEM_TYPES=Incident,Major Incident,Service Request,Operational Task,Task,User Story,Feature,Epic,Bug,Issue
 CUSTOMER_TOKEN_SECRET=
 NEXT_PUBLIC_MOCK_MODE=true
 MOCK_MODE=true
 ```
 
 `NEXT_PUBLIC_MOCK_MODE` is a build-time frontend value. All ADO and token settings are server-side Function settings in Azure.
+
+`ADO_AUTH_MODE=entra` is the production default. A PAT fallback still exists only for emergency/local troubleshooting if `ADO_AUTH_MODE=pat` and `ADO_PAT` are explicitly configured.
 
 ## Customer Token
 
@@ -94,9 +101,9 @@ For local-only preview without manually pasting a token, set `LOCAL_DEV_CUSTOMER
 
 ## ADO API Functions
 
-- `GET /api/tickets` uses the server-side `ADO_PAT`, filters by `ADO_CUSTOMER_FIELD`, and returns customer-safe ticket summaries.
-- `GET /api/tickets/{id}` uses the server-side `ADO_PAT`, confirms the ticket belongs to that customer, and returns customer-safe detail, timeline, comments, and SLA data.
-- `GET /api/ado/status` uses the server-side `ADO_PAT` to confirm the ADO project and fields endpoint are reachable. It returns only connection metadata, never the PAT.
+- `GET /api/tickets` uses a server-side Entra access token, filters by `ADO_CUSTOMER_FIELD`, and returns customer-safe ticket summaries.
+- `GET /api/tickets/{id}` uses a server-side Entra access token, confirms the ticket belongs to that customer, and returns customer-safe detail, timeline, comments, and SLA data.
+- `GET /api/ado/status` uses the server-side Entra access token to confirm the ADO project and fields endpoint are reachable. It returns only connection metadata, never secrets or access tokens.
 
 ## Azure Static Web Apps
 
@@ -107,17 +114,28 @@ For local-only preview without manually pasting a token, set `LOCAL_DEV_CUSTOMER
 - API build command: `npm run build`
 - Node.js build/runtime target: `22`
 - Managed Functions runtime: `node:22`
-- Configure Static Web App application settings for `ADO_ORG`, `ADO_PROJECT`, `ADO_PAT`, `ADO_CUSTOMER_FIELD`, `ADO_WORK_ITEM_TYPES`, `CUSTOMER_TOKEN_SECRET`, and `MOCK_MODE=false`.
+- Configure Static Web App application settings for `ADO_ORG`, `ADO_PROJECT`, `ADO_AUTH_MODE=entra`, `ADO_ENTRA_TENANT_ID`, `ADO_ENTRA_CLIENT_ID`, `ADO_ENTRA_CLIENT_SECRET`, `ADO_ENTRA_SCOPE`, `ADO_CUSTOMER_FIELD`, `ADO_WORK_ITEM_TYPES`, `CUSTOMER_TOKEN_SECRET`, and `MOCK_MODE=false`.
 
 The free tier can host the exported static app and managed Azure Functions API together. Secrets must be configured as Static Web App application settings, never as `NEXT_PUBLIC_*` variables.
 
-The included GitHub Actions workflow is manual-only until you add `AZURE_STATIC_WEB_APPS_API_TOKEN` as a repository secret. Runtime API secrets still need to be configured on the Azure Static Web Apps resource.
+The Azure-created GitHub Actions workflow deploys on pushes to `main`. Runtime API secrets still need to be configured on the Azure Static Web Apps resource.
 
-## Microsoft Entra ID
+## Azure DevOps Entra Access
+
+ADO access uses Microsoft Entra client credentials from the Azure Function runtime:
+
+- `ADO_ENTRA_TENANT_ID`: Entra tenant ID.
+- `ADO_ENTRA_CLIENT_ID`: App registration client/application ID.
+- `ADO_ENTRA_CLIENT_SECRET`: App registration client secret.
+- `ADO_ENTRA_SCOPE`: Azure DevOps resource scope. Use the default `https://app.vssps.visualstudio.com/.default` unless Microsoft changes the ADO resource.
+
+In Azure DevOps, add the service principal represented by `ADO_ENTRA_CLIENT_ID` to the organization/project and grant it only the read permissions needed for work items, revisions, and comments. The app does not request delegated user access and never sends this token to the browser.
+
+## Microsoft Entra Login
 
 Azure Static Web Apps built-in Microsoft Entra sign-in is configured at the route layer:
 
-- `/` and `/ticket?id={ticketId}` require the SWA `authenticated` role.
+- `/` and `/ticket?id={ticketId}` require the SWA `customer-dashboard-users` role.
 - Unauthenticated UI requests redirect to `/.auth/login/aad`.
 - `/login` redirects to `/.auth/login/aad`.
 - `/logout` redirects to `/.auth/logout`.
@@ -125,6 +143,8 @@ Azure Static Web Apps built-in Microsoft Entra sign-in is configured at the rout
 - `/api/*` remains reachable at the SWA layer because the Functions validate the signed customer token and return customer-scoped DTOs.
 
 This adds an Entra gate in front of the static dashboard, but it does not replace customer-token authorization. Customers still need a valid customer token for API data access, and the token is still sent only in request headers.
+
+After deployment, invite or assign only approved people to the Static Web Apps role named `customer-dashboard-users`. Users who can sign in but do not have this role cannot load the static dashboard.
 
 The built-in Entra provider works without committing client IDs or secrets. If you later need to restrict sign-in to a specific tenant through a custom Entra app registration, use the Static Web Apps Standard plan and add an `auth.identityProviders.azureActiveDirectory` block in `staticwebapp.config.json` that references app settings for the client ID and secret. Use these callback URLs in the Entra app registration after the SWA URL exists:
 
@@ -137,5 +157,6 @@ https://<your-static-web-app-host>/.auth/logout/aad/callback
 
 - The frontend imports only customer-safe DTO types and mock data.
 - Real ADO access exists only in `api/shared.ts`, which is imported by Azure Functions only.
+- ADO Entra client credentials are read only by Azure Functions and are never exposed as `NEXT_PUBLIC_*`.
 - API responses use allowlist mapping, so internal ADO fields, assignee emails, security notes, and internal comments are never serialized to customers.
 - Customer comments must be explicitly tagged `[customer]`; `[internal]`, `[private]`, `[security]`, and deleted comments are blocked.

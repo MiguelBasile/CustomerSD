@@ -34,7 +34,7 @@
     },
     {
       "route": "/*",
-      "allowedRoles": ["authenticated"],
+      "allowedRoles": ["customer-dashboard-users"],
       "headers": {
         "Cache-Control": "no-store"
       }

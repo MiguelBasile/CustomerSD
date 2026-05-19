@@ -22,10 +22,10 @@ That separation prevents customer routes from inheriting the developer dashboard
 
 - Next.js exports the customer UI as static files in `out/`.
 - Azure Functions expose `/api/tickets` and `/api/tickets/{id}`.
-- Azure Functions expose `/api/ado/status` for safe PAT-backed ADO connectivity checks.
+- Azure Functions expose `/api/ado/status` for safe Entra-backed ADO connectivity checks.
 - The repo targets Node.js 22 for local development, GitHub Actions builds, and the Static Web Apps managed Functions runtime.
-- Azure Static Web Apps route rules require Microsoft Entra authenticated users for the static dashboard while leaving `/api/*` token-gated by the Functions.
-- Azure Functions call Azure DevOps REST APIs using `ADO_PAT`.
+- Azure Static Web Apps route rules require the `customer-dashboard-users` role for the static dashboard while leaving `/api/*` token-gated by the Functions.
+- Azure Functions call Azure DevOps REST APIs using a server-side Microsoft Entra service principal token.
 - The browser never calls ADO and never receives raw ADO work items.
 - ADO remains the system of record. No local ticket state is stored.
 - `api/shared.ts` converts raw ADO work items into customer-safe DTOs through an allowlist and validates signed customer tokens.
@@ -67,7 +67,18 @@ README.md
 ## Secure API Snippet
 
 ```ts
-const auth = Buffer.from(`:${process.env.ADO_PAT}`).toString("base64");
+const body = new URLSearchParams({
+  client_id: process.env.ADO_ENTRA_CLIENT_ID!,
+  client_secret: process.env.ADO_ENTRA_CLIENT_SECRET!,
+  grant_type: "client_credentials",
+  scope: "https://app.vssps.visualstudio.com/.default"
+});
+
+const tokenResponse = await fetch(
+  `https://login.microsoftonline.com/${process.env.ADO_ENTRA_TENANT_ID}/oauth2/v2.0/token`,
+  { method: "POST", body }
+);
+const { access_token } = await tokenResponse.json();
 
 export async function adoFetch(path: string, init: RequestInit = {}) {
   const res = await fetch(
@@ -75,7 +86,7 @@ export async function adoFetch(path: string, init: RequestInit = {}) {
     {
       ...init,
       headers: {
-        Authorization: `Basic ${auth}`,
+        Authorization: `Bearer ${access_token}`,
         Accept: "application/json",
         "Content-Type": "application/json",
         ...init.headers
@@ -112,8 +123,8 @@ const ticket = mockMode ? getMockTicket("contoso", id) : data?.ticket;
 
 ## Security Controls
 
-- `ADO_PAT` is read only by `api/shared.ts` in Azure Functions.
-- Azure Functions read `ADO_PAT` from environment variables and never return it to the browser.
+- ADO Entra client credentials are read only by `api/shared.ts` in Azure Functions.
+- Azure Functions request ADO access tokens server-side and never return tokens or client secrets to the browser.
 - Customer tokens are verified on every API request.
 - Customer filtering uses `ADO_CUSTOMER_FIELD`, defaulting to `Custom.CustomerId`.
 - API responses include only ticket ID, title, customer-safe status, priority, created date, last updated date, progress, sanitized description, customer-safe updates, timeline, and SLA display data.
@@ -152,10 +163,15 @@ npm run dev:api
 - API runtime: `node:22`
 - Entra sign-in path: `/.auth/login/aad`
 - Entra sign-out path: `/.auth/logout`
+- Required UI role: `customer-dashboard-users`
 - Configure app settings:
   - `ADO_ORG`
   - `ADO_PROJECT`
-  - `ADO_PAT`
+  - `ADO_AUTH_MODE=entra`
+  - `ADO_ENTRA_TENANT_ID`
+  - `ADO_ENTRA_CLIENT_ID`
+  - `ADO_ENTRA_CLIENT_SECRET`
+  - `ADO_ENTRA_SCOPE=https://app.vssps.visualstudio.com/.default`
   - `ADO_CUSTOMER_FIELD`
   - `ADO_WORK_ITEM_TYPES`
   - `CUSTOMER_TOKEN_SECRET`

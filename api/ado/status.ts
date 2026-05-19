@@ -13,7 +13,8 @@ app.http("adoStatus", {
         return json({
           connected: false,
           mode: "mock",
-          message: "Mock mode is enabled. Set MOCK_MODE=false and configure ADO_ORG, ADO_PROJECT, and ADO_PAT for live ADO."
+          message:
+            "Mock mode is enabled. Set MOCK_MODE=false and configure ADO_ORG, ADO_PROJECT, and the ADO Entra app settings for live ADO."
         });
       }
 
