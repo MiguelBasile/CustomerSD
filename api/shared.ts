@@ -132,21 +132,22 @@ export function parseAllowedUserUpns(value: string | undefined): string[] {
 }
 
 export function parseUserCustomerMap(value: string | undefined): UserCustomerMapping[] {
-  return (value ?? "")
-    .split(",")
-    .map((entry) => {
-      const trimmed = entry.trim();
-      const separatorIndex = getMappingSeparatorIndex(trimmed);
-      if (separatorIndex <= 0) return undefined;
+  const mappings: UserCustomerMapping[] = [];
 
-      const userDetails = normalizeUserIdentifier(trimmed.slice(0, separatorIndex));
-      const customerValue = trimmed.slice(separatorIndex + 1).trim();
-      const [customerId, displayName] = customerValue.split("|").map((part) => part.trim());
-      if (!userDetails || !customerId) return undefined;
+  for (const entry of (value ?? "").split(",")) {
+    const trimmed = entry.trim();
+    const separatorIndex = getMappingSeparatorIndex(trimmed);
+    if (separatorIndex <= 0) continue;
 
-      return { userDetails, customerId, displayName: displayName || customerId };
-    })
-    .filter((entry): entry is UserCustomerMapping => Boolean(entry));
+    const userDetails = normalizeUserIdentifier(trimmed.slice(0, separatorIndex));
+    const customerValue = trimmed.slice(separatorIndex + 1).trim();
+    const [customerId, displayName] = customerValue.split("|").map((part) => part.trim());
+    if (!userDetails || !customerId) continue;
+
+    mappings.push({ userDetails, customerId, displayName: displayName || customerId });
+  }
+
+  return mappings;
 }
 
 export function parseSwaClientPrincipal(headers: Headers): ClientPrincipal | undefined {
