@@ -205,12 +205,27 @@ select {
   margin-bottom: 7px;
 }
 
+.logout-link {
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  margin-top: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+  font-weight: 700;
+  text-decoration: none;
+}
+
 .content-frame {
   min-width: 0;
 }
 
 .page-shell {
-  width: min(100%, 1160px);
+  width: min(100%, 1440px);
   margin: 0 auto;
   padding: 18px 32px 48px;
 }
@@ -385,8 +400,8 @@ h3 {
 
 .dashboard-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 360px;
-  gap: 24px;
+  grid-template-columns: minmax(760px, 1fr) minmax(280px, 320px);
+  gap: 22px;
   align-items: start;
 }
 
@@ -537,12 +552,14 @@ h3 {
   min-height: 36px;
   display: inline-flex;
   align-items: center;
+  border: 0;
   border-radius: 999px;
   padding: 0 16px;
   background: #f0f3f6;
   color: #33445b;
   font-size: 14px;
   font-weight: 650;
+  cursor: pointer;
 }
 
 .view-tab.active {
@@ -758,6 +775,12 @@ h3 {
 
 .error {
   color: var(--danger);
+}
+
+@media (max-width: 1500px) {
+  .dashboard-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 1280px) {

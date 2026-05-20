@@ -30,12 +30,6 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
               <Link className="active" href="/">
                 Dashboard <span aria-hidden="true">&gt;</span>
               </Link>
-              <Link href="/">Open Tickets</Link>
-              <Link href="/">Major Incidents</Link>
-              <Link href="/">SLA Watch</Link>
-              <Link href="/">Waiting on Customer</Link>
-              <Link href="/">Resolved</Link>
-              <Link href="/">Reports</Link>
             </nav>
 
             <section className="saved-views" aria-label="Saved views">
@@ -62,6 +56,9 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
               <span>Role</span>
               <strong>Customer Viewer</strong>
               <small>Secure ticket view</small>
+              <Link className="logout-link" href="/logout">
+                Sign out
+              </Link>
             </div>
           </aside>
 

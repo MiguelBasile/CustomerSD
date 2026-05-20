@@ -15,11 +15,14 @@ type TicketListResponse = {
   tickets: CustomerTicketSummary[];
 };
 
+type TicketView = "active" | "waiting" | "attention" | "recent";
+
 const mockMode = process.env.NEXT_PUBLIC_MOCK_MODE === "true";
 
 export function TicketList() {
   const [filters, setFilters] = useState<TicketFilters>({});
   const [token, setToken] = useState(() => readStoredToken());
+  const [activeView, setActiveView] = useState<TicketView>("active");
   const query = useMemo(() => new URLSearchParams(compactFilters(filters)).toString(), [filters]);
   const url = query ? `/api/tickets?${query}` : "/api/tickets";
   const {
@@ -49,6 +52,7 @@ export function TicketList() {
     .slice(0, 5);
   const attentionTickets = tickets.filter((ticket) => ticket.priority === "P1" || ticket.priority === "P2").slice(0, 4);
   const waitingList = tickets.filter((ticket) => ticket.status === "Waiting").slice(0, 3);
+  const visibleTickets = getVisibleTickets(tickets, activeView, recentlyUpdated);
 
   function updateToken(nextToken: string) {
     setToken(nextToken);
@@ -129,10 +133,18 @@ export function TicketList() {
           <TicketFiltersControl filters={filters} onChange={setFilters} />
 
           <div className="view-tabs" aria-label="Ticket views">
-            <span className="view-tab active">My Active - {activeTickets}</span>
-            <span className="view-tab">Waiting on Customer - {waitingTickets}</span>
-            <span className="view-tab">Needs Action - {urgentTickets}</span>
-            <span className="view-tab">Recently Updated - {recentlyUpdated.length}</span>
+            <ViewTab active={activeView === "active"} onClick={() => setActiveView("active")}>
+              My Active - {activeTickets}
+            </ViewTab>
+            <ViewTab active={activeView === "waiting"} onClick={() => setActiveView("waiting")}>
+              Waiting on Customer - {waitingTickets}
+            </ViewTab>
+            <ViewTab active={activeView === "attention"} onClick={() => setActiveView("attention")}>
+              Needs Action - {urgentTickets}
+            </ViewTab>
+            <ViewTab active={activeView === "recent"} onClick={() => setActiveView("recent")}>
+              Recently Updated - {recentlyUpdated.length}
+            </ViewTab>
           </div>
 
           {waitingForCustomerToken && <div className="empty">Customer access token required for this account.</div>}
@@ -144,9 +156,9 @@ export function TicketList() {
             </div>
           )}
           {isLoading && <div className="empty">Loading tickets...</div>}
-          {!isLoading && !error && !waitingForCustomerToken && tickets.length === 0 && <div className="empty">No tickets match these filters.</div>}
+          {!isLoading && !error && !waitingForCustomerToken && visibleTickets.length === 0 && <div className="empty">No tickets match these filters.</div>}
 
-          {tickets.length > 0 && (
+          {visibleTickets.length > 0 && (
             <table className="ticket-table">
               <thead>
                 <tr>
@@ -158,7 +170,7 @@ export function TicketList() {
                 </tr>
               </thead>
               <tbody>
-                {tickets.map((ticket) => (
+                {visibleTickets.map((ticket) => (
                   <tr key={ticket.id}>
                     <td className="ticket-id">#{ticket.id}</td>
                     <td>
@@ -223,6 +235,14 @@ export function TicketList() {
         </>
       )}
     </div>
+  );
+}
+
+function ViewTab({ active, children, onClick }: { active: boolean; children: ReactNode; onClick: () => void }) {
+  return (
+    <button className={active ? "view-tab active" : "view-tab"} type="button" onClick={onClick}>
+      {children}
+    </button>
   );
 }
 
@@ -297,6 +317,17 @@ function PriorityBadge({ priority }: { priority: CustomerTicketSummary["priority
 
 function compactFilters(filters: TicketFilters): Record<string, string> {
   return Object.fromEntries(Object.entries(filters).filter(([, value]) => Boolean(value))) as Record<string, string>;
+}
+
+function getVisibleTickets(
+  tickets: CustomerTicketSummary[],
+  view: TicketView,
+  recentlyUpdated: CustomerTicketSummary[]
+): CustomerTicketSummary[] {
+  if (view === "waiting") return tickets.filter((ticket) => ticket.status === "Waiting");
+  if (view === "attention") return tickets.filter((ticket) => ticket.priority === "P1" || ticket.priority === "P2");
+  if (view === "recent") return recentlyUpdated;
+  return tickets.filter((ticket) => !["Resolved", "Closed"].includes(ticket.status));
 }
 
 async function fetchJson(url: string, token: string): Promise<TicketListResponse> {
