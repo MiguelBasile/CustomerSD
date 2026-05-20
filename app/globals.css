@@ -432,7 +432,7 @@ h3 {
 
 .toolbar {
   display: grid;
-  grid-template-columns: minmax(160px, 1.2fr) repeat(4, minmax(96px, 0.8fr));
+  grid-template-columns: minmax(170px, 1.35fr) repeat(2, minmax(120px, 0.9fr)) repeat(2, minmax(150px, 1fr));
   gap: 10px;
   align-items: end;
   padding: 0 20px 16px;
@@ -441,6 +441,7 @@ h3 {
 .field {
   display: grid;
   gap: 6px;
+  min-width: 0;
 }
 
 .field label {
@@ -452,6 +453,7 @@ h3 {
 .field input,
 .field select {
   width: 100%;
+  min-width: 0;
   min-height: 38px;
   border: 1px solid var(--border);
   border-radius: 14px;
@@ -459,6 +461,10 @@ h3 {
   background: var(--surface-soft);
   color: var(--text);
   transition: border-color 140ms ease, box-shadow 140ms ease, background 140ms ease;
+}
+
+.field input[type="date"] {
+  min-width: 150px;
 }
 
 .field input:focus,
@@ -754,6 +760,12 @@ h3 {
   color: var(--danger);
 }
 
+@media (max-width: 1280px) {
+  .toolbar {
+    grid-template-columns: minmax(180px, 1.4fr) repeat(2, minmax(130px, 1fr));
+  }
+}
+
 @media (max-width: 1180px) {
   .app-frame {
     grid-template-columns: 1fr;
@@ -798,6 +810,10 @@ h3 {
   .command-bar,
   .meta-grid {
     grid-template-columns: 1fr;
+  }
+
+  .field input[type="date"] {
+    min-width: 0;
   }
 
   .work-header {
